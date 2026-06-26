@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProCam Studio - Professional Web Camera</title>
+    <style>
+        :root {
+            --bg-main: #0a0a0c;
+            --bg-panel: #141419;
+            --bg-surface: #1e1e24;
+            --accent: #e5a93c; /* Professional Gold/Amber accent */
+            --text-main: #f1f1f3;
+            --text-muted: #8e8e93;
+            --border: #2c2c35;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 15px;
+            overflow-x: hidden;
+        }
+
+        /* Container Layout */
+        .app-container {
+            width: 100%;
+            max-width: 850px;
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        header h1 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        header h1::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #ff453a;
+            border-radius: 50%;
+        }
+
+        .status-badge {
+            font-size: 0.75rem;
+            background: var(--bg-surface);
+            padding: 4px 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            color: var(--accent);
+            font-family: monospace;
+        }
+
+        /* Viewport Frame */
+        .viewport-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        video, canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+        }
+
+        canvas {
+            display: none;
+        }
+
+        /* Camera UI Overlays */
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+            box-sizing: border-box;
+            z-index: 2;
+        }
+
+        .overlay-top {
+            display: flex;
+            justify-content: space-between;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.7);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+
+        /* Grid lines */
+        .camera-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            border: none;
+            opacity: 0.2;
+            transition: opacity 0.3s;
+        }
+        .camera-grid::before, .camera-grid::after {
+            content: '';
+            position: absolute;
+            background: #fff;
+        }
+        /* Vertical grid lines */
+        .camera-grid::before {
+            top: 0; bottom: 0; left: 33.33%; right: 33.33%;
+            border-left: 1px solid #fff; border-right: 1px solid #fff;
+        }
+        /* Horizontal grid lines */
+        .camera-grid::after {
+            left: 0; right: 0; top: 33.33%; bottom: 33.33%;
+            border-top: 1px solid #fff; border-bottom: 1px solid #fff;
+        }
+
+        /* Flash */
+        .flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white; opacity: 0; pointer-events: none; z-index: 10;
+        }
+        @keyframes flash-trigger {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* Controls Section */
+        .control-panel {
+            margin-top: 20px;
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            display: block;
+            font-weight: 600;
+        }
+
+        /* Profile Filter Selector */
+        .filters-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .filters-scroll {
+            display: flex;
+            gap: 12px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+
+        .filters-scroll::-webkit-scrollbar {
+            height: 5px;
+        }
+        .filters-scroll::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .filter-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            cursor: pointer;
+            min-width: 130px;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+
+        .filter-card:hover {
+            border-color: rgba(229, 169, 60, 0.4);
+        }
+
+        .filter-card.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .filter-card.active .f-name { color: #000; font-weight: 600; }
+        .filter-card.active .f-desc { color: rgba(0,0,0,0.6); }
+
+        .f-name {
+            font-size: 0.85rem;
+            color: var(--text-main);
+            display: block;
+            margin-bottom: 2px;
+        }
+        .f-desc {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            display: block;
+        }
+
+        /* Bottom Deck Actions */
+        .deck-actions {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+        }
+
+        .side-opt {
+            display: flex;
+            gap: 15px;
+        }
+
+        .side-opt.right {
+            justify-content: flex-end;
+        }
+
+        .icon-btn {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s;
+        }
+
+        .icon-btn:hover {
+            background: var(--border);
+        }
+        
+        .icon-btn.active {
+            background: rgba(229, 169, 60, 0.15);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Shutter Trigger Button */
+        .shutter-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .pro-shutter {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            background: #fff;
+            border: 4px solid var(--bg-panel);
+            box-shadow: 0 0 0 2px #fff, 0 10px 20px rgba(0,0,0,0.4);
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        .pro-shutter:active {
+            transform: scale(0.92);
+            background: #e1e1e6;
+        }
+
+        /* 20 Authentic Professional Profiles / Camera Simulation Emulations */
+        .cam-normal { filter: none; }
+        .cam-leica-m { filter: contrast(1.18) saturate(0.9) brightness(0.95); }
+        .cam-fuji-chroma { filter: saturate(1.45) contrast(1.1) brightness(1.02); }
+        .cam-fuji-classic { filter: sepia(0.12) contrast(1.05) saturate(0.85); }
+        .cam-hasselblad { filter: contrast(1.03) saturate(1.02) brightness(1.02); }
+        .cam-kodak-gold { filter: sepia(0.22) saturate(1.25) hue-rotate(-5deg) contrast(1.05); }
+        .cam-cinestill { filter: hue-rotate(10deg) saturate(1.1) contrast(1.15) brightness(1.05); }
+        .cam-ilford-pan { filter: grayscale(1) contrast(1.35) brightness(0.95); }
+        .cam-tri-x { filter: grayscale(1) contrast(1.5) brightness(0.9); }
+        .cam-polaroid-600 { filter: contrast(0.88) brightness(1.08) sepia(0.15) saturate(0.9); }
+        .cam-technicolor { filter: hue-rotate(-15deg) saturate(1.6) contrast(1.1); }
+        .cam-agfa-vista { filter: saturate(1.2) hue-rotate(5deg) contrast(1.05); }
+        .cam-super8 { filter: sepia(0.25) contrast(1.1) brightness(0.95) saturate(0.8); }
+        .cam-sony-slog { filter: contrast(0.65) brightness(1.2) saturate(0.7); }
+        .cam-canon-l { filter: contrast(1.08) saturate(1.12) brightness(1.02); }
+        .cam-nikon-neutral { filter: contrast(0.95) saturate(0.95); }
+        .cam-nat-geo { filter: contrast(1.25) saturate(1.35); }
+        .cam-cyber-night { filter: hue-rotate(130deg) saturate(1.8) contrast(1.25) brightness(0.9); }
+        .cam-monochrome-hc { filter: grayscale(1) contrast(1.8) brightness(0.85); }
+        .cam-vintage-lomo { filter: contrast(1.3) saturate(1.4) hue-rotate(-10deg); }
+        .cam-holga { filter: contrast(1.2) saturate(0.7) sepia(0.1); }
+
+        /* Responsive UI fixes */
+        @media(max-width: 680px) {
+            .deck-actions {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            .side-opt { justify-content: center !important; }
+            .shutter-wrapper { order: -1; margin-bottom: 5px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <h1>PRO_CAM STUDIO</h1>
+            <div class="status-badge" id="resolutionDisplay">UHD 4K MODE</div>
+        </header>
+
+        <!-- Viewport Area -->
+        <div class="viewport-wrapper">
+            <div class="flash" id="flashOverlay"></div>
+            
+            <!-- Real-time HUD Grid Elements -->
+            <div class="camera-grid" id="gridLines"></div>
+            <div class="camera-overlay">
+                <div class="overlay-top">
+                    <span id="hudFacing">ISO AUTO</span>
+                    <span>RAW 14-BIT</span>
+                    <span id="hudFps">60 FPS</span>
+                </div>
+            </div>
+            
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <!-- Controls Area -->
+        <div class="control-panel">
+            <span class="section-title">Camera Profile Emulation</span>
+            <div class="filters-container">
+                <div class="filters-scroll" id="filtersScroll">
+                    <!-- 20 Camera profiles will dynamic build here -->
+                </div>
+            </div>
+
+            <!-- Bottom Deck -->
+            <div class="deck-actions">
+                <div class="side-opt">
+                    <button class="icon-btn active" id="gridToggleBtn">🏁 Grid</button>
+                </div>
+                
+                <div class="shutter-wrapper">
+                    <button class="pro-shutter" id="shutterBtn" title="Capture RAW Image"></button>
+                </div>
+
+                <div class="side-opt right">
+                    <button class="icon-btn" id="switchCamBtn">🔄 Lens Swap</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const shutterBtn = document.getElementById('shutterBtn');
+        const switchCamBtn = document.getElementById('switchCamBtn');
+        const gridToggleBtn = document.getElementById('gridToggleBtn');
+        const filtersScroll = document.getElementById('filtersScroll');
+        const flashOverlay = document.getElementById('flashOverlay');
+        const gridLines = document.getElementById('gridLines');
+        const resolutionDisplay = document.getElementById('resolutionDisplay');
+
+        let currentStream = null;
+        let isFrontCamera = false; 
+        let currentFilterClass = 'cam-normal';
+
+        // 20 Professional Camera Simulation Profiles
+        const cameraProfiles = [
+            { name: 'Standard Raw', class: 'cam-normal', desc: 'Unprocessed sensor output' },
+            { name: 'Leica M-Chrome', class: 'cam-leica-m', desc: 'High contrast organic look' },
+            { name: 'Fuji Velvia', class: 'cam-fuji-chroma', desc: 'Ultra-vivid landscapes' },
+            { name: 'Fuji Classic', class: 'cam-fuji-classic', desc: 'Nostalgic documentarian' },
+            { name: 'Hasselblad  Thomas', class: 'cam-hasselblad', desc: 'True color micro-gradation' },
+            { name: 'Kodak Gold 200', class: 'cam-kodak-gold', desc: 'Warm analog retro tint' },
+            { name: 'CineStill 800T', class: 'cam-cinestill', desc: 'Cinematic tungsten tone' },
+            { name: 'Ilford Pan F', class: 'cam-ilford-pan', desc: 'Fine grain fine art mono' },
+            { name: 'Kodak Tri-X', class: 'cam-tri-x', desc: 'High contrast street mono' },
+            { name: 'Polaroid 600', class: 'cam-polaroid-600', desc: 'Faded vintage look' },
+            { name: 'Technicolor', class: 'cam-technicolor', desc: '3-Strip vintage hollywood' },
+            { name: 'Agfa Vista', class: 'cam-agfa-vista', desc: 'Vibrant punchy street look' },
+            { name: 'Super 8 Vintage', class: 'cam-super8', desc: 'Grainy warm home movie' },
+            { name: 'Sony S-Log3', class: 'cam-sony-slog', desc: 'Flat profile for grading' },
+            { name: 'Canon L-Series', class: 'cam-canon-l', desc: 'Crisp commercial reds' },
+            { name: 'Nikon Neutral', class: 'cam-nikon-neutral', desc: 'Flat true-to-life portrait' },
+            { name: 'National Geo', class: 'cam-nat-geo', desc: 'Heavy saturate documentary' },
+            { name: 'Cyber Neon', class: 'cam-cyber-night', desc: 'Electric twilight profiles' },
+            { name: 'Contrast Mono', class: 'cam-monochrome-hc', desc: 'Deep stark black & whites' },
+            { name: 'Holga Toy Lofi', class: 'cam-holga', desc: 'Vignetted experimental art' }
+        ];
+
+        // Render Professional Profiles
+        function renderProfiles() {
+            cameraProfiles.forEach((profile, index) => {
+                const card = document.createElement('div');
+                card.className = `filter-card ${index === 0 ? 'active' : ''}`;
+                card.innerHTML = `
+                    <span class="f-name">${profile.name}</span>
+                    <span class="f-desc">${profile.desc}</span>
+                `;
+                card.onclick = () => {
+                    document.querySelectorAll('.filter-card').forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+                    video.className = profile.class;
+                    currentFilterClass = profile.class;
+                };
+                filtersScroll.appendChild(card);
+            });
+        }
+
+        // Professional Shutter Sound Generator (Mechanical Click)
+        function playProShutterSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Mechanical curtain sequence sound
+                const bufferSize = audioCtx.sampleRate * 0.12; // 120ms sound
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                
+                // Create crisp curtain click noise
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+                }
+                
+                const noiseNode = audioCtx.createBufferSource();
+                noiseNode.buffer = buffer;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.setValueAtTime(0.6, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.11);
+
+                noiseNode.connect(filter);
+                filter.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+
+                noiseNode.start();
+            } catch (e) {
+                console.error("Audio block:", e);
+            }
+        }
+
+        // Initialize High-Resolution Constraints Camera
+        async function initPremiumCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            // Target max high resolution specs (4K / 1080p dynamic depending on hardware capacities)
+            const constraints = {
+                video: {
+                    facingMode: isFrontCamera ? 'user' : 'environment',
+                    width: { ideal: 3840, min: 1920 },
+                    height: { ideal: 2160, min: 1080 }
+                },
+                audio: false
+            };
+
+            try {
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+                
+                // Display Resolution specs dynamically once data streams in
+                video.onloadedmetadata = () => {
+                    const w = video.videoWidth;
+                    const h = video.videoHeight;
+                    if (w >= 3840) {
+                        resolutionDisplay.innerText = `UHD 4K MODE [${w}x${h}]`;
+                    } else if (w >= 1920) {
+                        resolutionDisplay.innerText = `FHD 1080P [${w}x${h}]`;
+                    } else {
+                        resolutionDisplay.innerText = `HD MODE [${w}x${h}]`;
+                    }
+                };
+            } catch (err) {
+                console.warn("4K/FHD direct mode downscaled, attempting secondary profile:", err);
+                // Fallback auto-stream
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    video.srcObject = currentStream;
+                    resolutionDisplay.innerText = "AUTO RESOLUTION MODE";
+                } catch (fail) {
+                    alert("Error opening premium lens camera stream.");
+                }
+            }
+        }
+
+        // High Resolution Precision Capture Action
+        function capturePremiumPhoto() {
+            // Flash Effect
+            flashOverlay.style.animation = 'none';
+            flashOverlay.offsetHeight; // trigger reflow
+            flashOverlay.style.animation = 'flash-trigger 0.2s ease-out';
+
+            playProShutterSound();
+
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size matching the exact raw hardware sensor resolution
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Prevent image inversion for user cameras
+            if (isFrontCamera) {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+
+            // Extract high fidelity filters
+            ctx.filter = getComputedStyle(video).filter;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Output clean premium image link download
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95); // 0.95 Quality compression factor
+            const anchor = document.createElement('a');
+            anchor.download = `PROCAM_${Date.now()}.jpg`;
+            anchor.href = dataUrl;
+            anchor.click();
+        }
+
+        // Event Listeners
+        shutterBtn.addEventListener('click', capturePremiumPhoto);
+        
+        switchCamBtn.addEventListener('click', () => {
+            isFrontCamera = !isFrontCamera;
+            initPremiumCamera();
+        });
+
+        gridToggleBtn.addEventListener('click', () => {
+            const isVisible = gridLines.style.display !== 'none';
+            gridLines.style.display = isVisible ? 'none' : 'block';
+            gridToggleBtn.classList.toggle('active', !isVisible);
+        });
+
+        // Bootstrap App
+        renderProfiles();
+        initPremiumCamera();
+    </script>
+</body>
+</html>
